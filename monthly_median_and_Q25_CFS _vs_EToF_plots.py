@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from scipy import stats
 import numpy as np
-from bokeh.io import output_file, save, show
+from bokeh.io import output_file, save
 from bokeh.plotting import figure
 from bokeh.models import LinearAxis, Range1d, ColumnDataSource
 from bokeh.models.annotations import Label
@@ -256,17 +256,12 @@ def make_tables(cfs_var):
     # These dfs are used for exporting stats to the .xlsx files.
     # Each time the loop is executed, a record is appended onto each df.
     # When the loop is finished, the dfs are exported to the corresponding .xlsx files.
-    df_pearson_mediancfs_r = pd.DataFrame({'station_id': [], 'site_name': [], 'January': [], 'February': [],
+    df_pearsons_r = pd.DataFrame({'station_id': [], 'site_name': [], 'January': [], 'February': [],
                                       'March': [], 'April': [], 'May': [], 'June': [], 'July': [], 'August': [],
                                       'September': [], 'October': [], 'November': [], 'December': []})
-    df_pearson_mediancfs_p = df_pearson_mediancfs_r.copy(deep=True)
-    #df_pearson_q25cfs_r = df_pearson_mediancfs_r.copy(deep=True)
-    #df_pearson_q25cfs_p = df_pearson_mediancfs_r.copy(deep=True)
-
-    df_kendall_mediancfs_r = df_pearson_mediancfs_r.copy(deep=True)
-    df_kendall_mediancfs_p = df_pearson_mediancfs_r.copy(deep=True)
-    #df_kendall_q25cfs_r = df_pearson_mediancfs_r.copy(deep=True)
-    #df_kendall_q25cfs_p = df_pearson_mediancfs_r.copy(deep=True)
+    df_pearson_p = df_pearsons_r.copy(deep=True)
+    df_kendall_r = df_pearsons_r.copy(deep=True)
+    df_kendall_p = df_pearsons_r.copy(deep=True)
 
     # If a 'tables' directory does not exist, make it
     path = os.getcwd() + '/tables'
@@ -281,115 +276,81 @@ def make_tables(cfs_var):
 
         ##########################################################################
         # Pearson Correlation Coefficient Calculations
-        #
-        # Note: It would be prettier to change the next 2 sections into 1 function
 
-        record_pearson_mediancfs_r = [site, site_name]
-        record_pearson_mediancfs_p = [site, site_name]
-        #record_pearson_q25cfs_r = [site, site_name]
-        #record_pearson_q25cfs_p = [site, site_name]
+        record_pearson_r = [site, site_name]
+        record_pearson_p = [site, site_name]
 
         for i in range(12):
             df_monthly = df_data[df_data["month"] == month_dict[i + 1]]
 
-            r_correlation_mediancfs, p_mediancfs = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
-            #r_correlation_q25cfs, p_q25cfs = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly['Q25_cfs'])
+            r_correlation, p_pearson = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
 
-            record_pearson_mediancfs_r.append(r_correlation_mediancfs)
-            record_pearson_mediancfs_p.append(p_mediancfs)
-            #record_pearson_q25cfs_r.append(r_correlation_max)
-            #record_pearson_q25cfs_p.append(p_max)
+            record_pearson_r.append(r_correlation)
+            record_pearson_p.append(p_pearson)
 
-        df_pearson_mediancfs_r.loc[len(df_pearson_mediancfs_r.index)] = record_pearson_mediancfs_r
-        df_pearson_mediancfs_p.loc[len(df_pearson_mediancfs_p.index)] = record_pearson_mediancfs_p
-        #df_pearson_max_r.loc[len(df_pearson_max_r.index)] = record_pearson_max_r
-        #df_pearson_max_p.loc[len(df_pearson_max_p.index)] = record_pearson_max_p
-
+        df_pearsons_r.loc[len(df_pearsons_r.index)] = record_pearson_r
+        df_pearson_p.loc[len(df_pearson_p.index)] = record_pearson_p
 
         #######################################################
         # Kendall Rank Correlation Coefficient Calculations
 
-        record_kendall_mediancfs_r = [site, site_name]
-        record_kendall_mediancfs_p = [site, site_name]
-        #record_kendall_max_r = [site, site_name]
-        #record_kendall_max_p = [site, site_name]
+        record_kendall_r = [site, site_name]
+        record_kendall_p = [site, site_name]
 
         for i in range(12):
             df_monthly = df_data[df_data["month"] == month_dict[i + 1]]
 
-            tau_correlation_mediancfs, p_mediancfs = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
-            #tau_correlation_max, p_max = stats.kendalltau(df_monthly[ET_var], df_monthly['max_cfs'])
+            tau_correlation_mediancfs, p_pearson = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
 
-            record_kendall_mediancfs_r.append(tau_correlation_mediancfs)
-            record_kendall_mediancfs_p.append(p_mediancfs)
-            #record_kendall_max_r.append(tau_correlation_max)
-            #record_kendall_max_p.append(p_max)
+            record_kendall_r.append(tau_correlation_mediancfs)
+            record_kendall_p.append(p_pearson)
 
-        df_kendall_mediancfs_r.loc[len(df_kendall_mediancfs_r.index)] = record_kendall_mediancfs_r
-        df_kendall_mediancfs_p.loc[len(df_kendall_mediancfs_p.index)] = record_kendall_mediancfs_p
-        #df_kendall_max_r.loc[len(df_kendall_max_r.index)] = record_kendall_max_r
-        #df_kendall_max_p.loc[len(df_kendall_max_p.index)] = record_kendall_max_p
+        df_kendall_r.loc[len(df_kendall_r.index)] = record_kendall_r
+        df_kendall_p.loc[len(df_kendall_p.index)] = record_kendall_p
 
     ################################################################
     # Set the metadata for the .xlsx files and export the dataframes.
     # We do this for both kendall and pearson files.
 
     # Pearson start
-    df_pearson_mediancfs_r = df_pearson_mediancfs_r.transpose()
-    df_pearson_mediancfs_p = df_pearson_mediancfs_p.transpose()
-    #df_pearson_max_r = df_pearson_max_r.transpose()
-    #df_pearson_max_p = df_pearson_max_p.transpose()
+    df_pearsons_r = df_pearsons_r.transpose()
+    df_pearson_p = df_pearson_p.transpose()
 
+    writer = pd.ExcelWriter('pearson_correlations_EToF_vs_' + cfs_var + '.xlsx', engine='xlsxwriter')
 
-    writer = pd.ExcelWriter('pearson_EToF_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
-
-    df_pearson_mediancfs_r.to_excel(writer, sheet_name=cfs_var, index=True)
-    df_pearson_mediancfs_p.to_excel(writer, sheet_name=cfs_var, index=True, startrow=17)
-    #df_pearson_max_r.to_excel(writer, sheet_name='max_flow', index=True)
-    #df_pearson_max_p.to_excel(writer, sheet_name='max_flow', index=True, startrow=17)
+    df_pearsons_r.to_excel(writer, sheet_name=cfs_var, index=True)
+    df_pearson_p.to_excel(writer, sheet_name=cfs_var, index=True, startrow=17)
 
     ws = writer.sheets[cfs_var]
     ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
     ws.write_string(17, 0, 'P-value')
     ws.set_column(0, 0, 35)
     ws.set_column(1, 50, 50)
-    #ws = writer.sheets['max_flow']
-    #ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
-    #ws.write_string(17, 0, 'P-value')
-    #ws.set_column(0, 0, 35)
-    #ws.set_column(1, 50, 50)
 
     # Kendall start
-    df_kendall_mediancfs_r = df_kendall_mediancfs_r.transpose()
-    df_kendall_mediancfs_p = df_kendall_mediancfs_p.transpose()
-    #df_kendall_max_r = df_kendall_max_r.transpose()
-    #df_kendall_max_p = df_kendall_max_p.transpose()
+    df_kendall_r = df_kendall_r.transpose()
+    df_kendall_p = df_kendall_p.transpose()
 
-    writer2 = pd.ExcelWriter('kendall_EToF_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
+    writer2 = pd.ExcelWriter('kendall_correlations_EToF_vs_' + cfs_var + '.xlsx', engine='xlsxwriter')
 
-    df_kendall_mediancfs_r.to_excel(writer2, sheet_name=cfs_var, index=True)
-    df_kendall_mediancfs_p.to_excel(writer2, sheet_name=cfs_var, index=True, startrow=17)
-    #df_kendall_max_r.to_excel(writer2, sheet_name='max_flow', index=True)
-    #df_kendall_max_p.to_excel(writer2, sheet_name='max_flow', index=True, startrow=17)
+    df_kendall_r.to_excel(writer2, sheet_name=cfs_var, index=True)
+    df_kendall_p.to_excel(writer2, sheet_name=cfs_var, index=True, startrow=17)
 
     ws = writer2.sheets[cfs_var]
     ws.write_string(0, 0, "Kendall's Correlation: Tau")
     ws.write_string(17, 0, 'P-value')
     ws.set_column(0, 0, 35)
     ws.set_column(1, 50, 50)
-    #ws = writer2.sheets['max_flow']
-    #ws.write_string(0, 0, "Kendall's Correlation: Tau")
-    #ws.write_string(17, 0, 'P-value')
-    #ws.set_column(0, 0, 35)
-    #ws.set_column(1, 50, 50)
 
     writer.save()
     writer2.save()
+    os.chdir('..')
 
 
 def main():
     #make_plots('median_cfs')
     #make_plots('Q25_cfs')
     make_tables('median_cfs')
+    make_tables('Q25_cfs')
 
 main()
