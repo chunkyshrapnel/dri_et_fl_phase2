@@ -20,12 +20,6 @@ site_list = ['09180000',  # DOLORES RIVER NEAR CISCO, UT,
              '09306500',  # WHITE RIVER NEAR WATSON, UTAH
              '09379500',  # SAN JUAN RIVER NEAR BLUFF, UT
              ]
-site_list = ['09180000']
-
-# Right now the script is set up so that it only works with one ET variable at a time.
-# For example, the script works with 'ET_MEAN' or 'EToF_MEAN', not both at the same time.
-# To export different variables, the global variable below must be changed.
-cfs_var = 'median_cfs'
 
 # Dictionary used to transfer between strings and ints.
 month_dict = {
@@ -43,44 +37,20 @@ month_dict = {
     12: 'Dec'
 }
 
-# These dfs are used for exporting stats to the .xlsx files.
-# Each time the loop is executed, a record is appended onto each df.
-# When the loop is finished, the dfs are exported to the corresponding .xlsx files.
-df_pearson_mean_r = pd.DataFrame({'station_id': [], 'site_name': [], 'January': [], 'February': [],
-                                  'March': [], 'April': [], 'May': [], 'June': [], 'July': [], 'August': [],
-                                  'September': [], 'October': [], 'November': [], 'December': []})
-df_pearson_mean_p = df_pearson_mean_r.copy(deep=True)
-df_pearson_max_r = df_pearson_mean_r.copy(deep=True)
-df_pearson_max_p = df_pearson_mean_r.copy(deep=True)
-df_pearson_min_r = df_pearson_mean_r.copy(deep=True)
-df_pearson_min_p = df_pearson_mean_r.copy(deep=True)
-
-df_kendall_mean_r = df_pearson_mean_r.copy(deep=True)
-df_kendall_mean_p = df_pearson_mean_r.copy(deep=True)
-df_kendall_max_r = df_pearson_mean_r.copy(deep=True)
-df_kendall_max_p = df_pearson_mean_r.copy(deep=True)
-df_kendall_min_r = df_pearson_mean_r.copy(deep=True)
-df_kendall_min_p = df_pearson_mean_r.copy(deep=True)
-
 # Read in the metadata so that the site names can be attached to the graph.
-try:
-    df_metadata = pd.read_csv('raw_data/metadata.csv')
-except:
-    print("ERROR WITH READING METADATA")
-    exit(1)
+def load_metadata():
+    
+    try:
+        df_metadata = pd.read_csv('raw_data/metadata.csv')
+    except:
+        print("ERROR WITH READING METADATA")
+        exit(1)
+        
+    return df_metadata
 
-# Create a folder for 'plots'
-path = os.getcwd() + '/plots'
-if not (os.path.isdir(path)):
-    os.mkdir('plots')
-os.chdir('plots')
 
-for site in site_list:
-
-    site_name = df_metadata.loc[df_metadata['station_id'] == int(site), 'site_name'].iloc[0]
-    output_file(site + '_time_series__EToF_vs_' + cfs_var + '.html')
-
-    # Reads the data in for the given site
+# Reads the data in for the given site
+def load_raw_data_and_join(site):
     try:
         df_fl = pd.read_csv('../raw_data/flow/' + site + '_monthly_summary.csv')
         df_et = pd.read_csv('../raw_data/ucrb_riparain_et/' + site + '_EEMETRIC_monthly_et_etof.csv')
@@ -88,316 +58,338 @@ for site in site_list:
         print("ERROR WHEN READING DATA FROM SITE: " + site)
         exit(1)
 
-    # If a directory for the site does not exist, make it.
-    path = os.getcwd() + '/' + site + '_plots'
-    if not (os.path.isdir(path)):
-        os.mkdir(site + '_plots')
-
     # Truncates a column in the evap data so that it matches a column in the flow data.
     # The columns need to match so that a left join can be performed
     df_et['END_DATE'] = df_et['END_DATE'].apply(lambda x: x[0:7])
     df_et.rename({'END_DATE': "date"}, axis=1, inplace=True)
-    df_merged = df_et.merge(df_fl, on='date', how='left')
+    df_data = df_et.merge(df_fl, on='date', how='left')
 
     # Changes the start date column from type 'string' to 'datetime'
     # This is needed for plotting the x axis
-    df_merged['START_DATE'] = df_et['START_DATE'].apply(lambda x: pd.to_datetime(x))
+    df_data['START_DATE'] = df_et['START_DATE'].apply(lambda x: pd.to_datetime(x))
 
     # Here the month column is changed from int to string.
     # Example: 1 --> 'jan'
-    df_merged['month'] = df_merged['month'].apply(lambda x: month_dict[x])
+    df_data['month'] = df_data['month'].apply(lambda x: month_dict[x])
+    
+    return df_data
+    
+def make_plots(cfs_var):
 
-    #######################################################
-    # Series plot Configuration
-    p = figure(x_axis_type="datetime", width=1500)
-    p.xgrid.grid_line_color = None
-    p.ygrid.grid_line_color = None
-    p.circle(x='START_DATE', y=cfs_var,
-             legend_label= cfs_var + ', Monthly (cfs)',
-             source=ColumnDataSource(df_merged),
-             color='blue', size=6)
-    p.line(x='START_DATE', y=cfs_var,
-           source=ColumnDataSource(df_merged),
-           color='blue')
+    df_metadata = load_metadata()
+    
+    # Create a folder for 'plots'
+    path = os.getcwd() + '/plots'
+    if not (os.path.isdir(path)):
+        os.mkdir('plots')
+    os.chdir('plots')
 
-    p.extra_y_ranges = {"foo": Range1d(start=df_merged['EToF_MEAN'].min() - 5, end=df_merged['EToF_MEAN'].max() + 5)}
-    p.circle(x='START_DATE', y='EToF_MEAN',
-             source=ColumnDataSource(df_merged),
-             y_range_name='foo',
-             legend_label='EToF_MEAN, Monthly (mm/month)',  # idk if this is the right units
-             color='green', size=6)
-    p.line(x='START_DATE', y='EToF_MEAN',
-           source=ColumnDataSource(df_merged),
-           y_range_name='foo',
-           color='green')
+    for site in site_list:
 
-    p.title.text = 'SITE: ' + site_name + ', ' + site + ' - EToF_MEAN vs. ' + cfs_var
-    p.xaxis.axis_label = 'Date'
-    p.yaxis.axis_label = cfs_var + ', Monthly (cfs)'
-    p.add_layout(LinearAxis(y_range_name="foo", axis_label='EToF_MEAN, Monthly (mm/month)'), 'right')
+        site_name = df_metadata.loc[df_metadata['station_id'] == int(site), 'site_name'].iloc[0]
+        output_file(site + '_time_series__EToF_vs_' + cfs_var + '.html')
 
-    hover = HoverTool()
-    p.legend.click_policy = 'hide'
-    hover.tooltips = [
-        ('Year', '@year'),
-        ('Month', '@month'),
-        ('EToF_MEAN', '@EToF_MEAN'),
-        (cfs_var, '@' + cfs_var)
-    ]
-    p.add_tools(hover)
+        df_data = load_raw_data_and_join(site)
 
-    os.chdir(path)
-    save(p)
+        # If a directory for the site does not exist, make it.
+        path = os.getcwd() + '/' + site + '_plots'
+        if not (os.path.isdir(path)):
+            os.mkdir(site + '_plots')
 
-    #######################################################
-    # Scatter plot Configuration
-    output_file(site + '_scatter_plot_EToF_vs_' + cfs_var + '.html')
+        #######################################################
+        # Series plot Configuration
+        p = figure(x_axis_type="datetime", width=1500)
+        p.xgrid.grid_line_color = None
+        p.ygrid.grid_line_color = None
+        p.circle(x='START_DATE', y=cfs_var,
+                 legend_label= cfs_var + ', Monthly (cfs)',
+                 source=ColumnDataSource(df_data),
+                 color='blue', size=6)
+        p.line(x='START_DATE', y=cfs_var,
+               source=ColumnDataSource(df_data),
+               color='blue')
 
-    p2 = figure(width=900, height=900)
-    p2.xgrid.grid_line_color = None
-    p2.ygrid.grid_line_color = None
-    p2.circle(x=cfs_var, y='EToF_MEAN',
-              source=ColumnDataSource(df_merged),
-              color='black', fill_color="#add8e6",
-              size=8)
+        p.extra_y_ranges = {"foo": Range1d(start=df_data['EToF_MEAN'].min() - 5, end=df_data['EToF_MEAN'].max() + 5)}
+        p.circle(x='START_DATE', y='EToF_MEAN',
+                 source=ColumnDataSource(df_data),
+                 y_range_name='foo',
+                 legend_label='EToF_MEAN, Monthly (mm/month)',  # idk if this is the right units
+                 color='green', size=6)
+        p.line(x='START_DATE', y='EToF_MEAN',
+               source=ColumnDataSource(df_data),
+               y_range_name='foo',
+               color='green')
 
-    p2.title.text = 'SITE: ' + site_name + ', ' + site + ' - Flow vs. EToF'
-    p2.yaxis.axis_label = 'EToF, Monthly (mm/month)'
-    p2.xaxis.axis_label = cfs_var + ', Monthly (cfs)'
+        p.title.text = 'SITE: ' + site_name + ', ' + site + ' - EToF_MEAN vs. ' + cfs_var
+        p.xaxis.axis_label = 'Date'
+        p.yaxis.axis_label = cfs_var + ', Monthly (cfs)'
+        p.add_layout(LinearAxis(y_range_name="foo", axis_label='EToF_MEAN, Monthly (mm/month)'), 'right')
 
-    # Calculate the least-square regression line
-    regression_line = np.polyfit(df_merged[cfs_var], df_merged['EToF_MEAN'], 1, full=True)
-    slope = regression_line[0][0]
-    intercept = regression_line[0][1]
-    y_predicted = [slope * i + intercept for i in df_merged[cfs_var]]
-    p2.line(df_merged[cfs_var], y_predicted, color='black')
+        hover = HoverTool()
+        p.legend.click_policy = 'hide'
+        hover.tooltips = [
+            ('Year', '@year'),
+            ('Month', '@month'),
+            ('EToF_MEAN', '@EToF_MEAN'),
+            (cfs_var, '@' + cfs_var)
+        ]
+        p.add_tools(hover)
 
-    # Calculations to be used in the stats label on every scatter plot
-    pearson_r, pearson_p = stats.pearsonr(df_merged['EToF_MEAN'], df_merged[cfs_var])
-    kendall_r, kendall_p = stats.kendalltau(df_merged['EToF_MEAN'], df_merged[cfs_var])
+        os.chdir(path)
+        save(p)
 
-    # The stats label to be added.
-    label_text = 'Slope: ' + str(round(slope, 4)) + '\n' + \
-                 'Intercept: ' + str(round(intercept, 4)) + '\n' + \
-                 'Pearson r: ' + str(round(pearson_r, 4)) + '\n' + \
-                 'Pearson P-Value: ' + str(round(pearson_p, 4)) + '\n' + \
-                 'Kendall r: ' + str(round(kendall_r, 4)) + '\n' + \
-                 'Kendall P-Value: ' + str(round(kendall_p, 4)) + '\n' + \
-                 'n: ' + str(len(df_merged))
-    label = Label(x=620, y=70, x_units='screen', y_units='screen', text=label_text)
-    p2.add_layout(label)
+        #######################################################
+        # Scatter plot Configuration
+        output_file(site + '_scatter_plot__EToF_vs_' + cfs_var + '.html')
 
-    hover2 = HoverTool()
-    hover2.tooltips = [
-        ('Year', '@year'),
-        ('Month', '@month'),
-        ('EToF_MEAN', '@EToF_MEAN'),
-        (cfs_var, '@' + cfs_var)
-    ]
-    p2.add_tools(hover2)
+        p2 = figure(width=900, height=900)
+        p2.xgrid.grid_line_color = None
+        p2.ygrid.grid_line_color = None
+        p2.circle(x=cfs_var, y='EToF_MEAN',
+                  source=ColumnDataSource(df_data),
+                  color='black', fill_color="#add8e6",
+                  size=8)
 
-    save(p2)
-
-    '''#######################################################
-    # Monthly scatter plot
-
-    output_file(site + '_' + ET_var + '_monthly_scatter_plot.html')
-    list_of_monthly_figs = []
-
-    for i in range(12):
-        df_monthly = df_merged[df_merged["month"] == month_dict[i + 1]]
-
-        p_month = figure(width=450, height=450)
-        p_month.xgrid.grid_line_color = None
-        p_month.ygrid.grid_line_color = None
-        p_month.circle(x='min_cfs', y=ET_var,
-                       source=ColumnDataSource(df_monthly),
-                       color='black', fill_color="#add8e6",
-                       size=8)
-
-        p_month.title.text = month_dict[i + 1] + ' - ' + site_name + ', ' + site
-        p_month.yaxis.axis_label = ET_var + ', Monthly (mm/month)'
-        p_month.xaxis.axis_label = 'min_cfs, Monthly (cfs)'
+        p2.title.text = 'SITE: ' + site_name + ', ' + site + ' - Flow vs. EToF'
+        p2.yaxis.axis_label = 'EToF_MEAN, Monthly (mm/month)'
+        p2.xaxis.axis_label = cfs_var + ', Monthly (cfs)'
 
         # Calculate the least-square regression line
-        regression_line = np.polyfit(df_monthly['min_cfs'], df_monthly[ET_var], 1, full=True)
+        regression_line = np.polyfit(df_data[cfs_var], df_data['EToF_MEAN'], 1, full=True)
         slope = regression_line[0][0]
         intercept = regression_line[0][1]
-        y_predicted = [slope * i + intercept for i in df_monthly['min_cfs']]
-        p_month.line(df_monthly['min_cfs'], y_predicted, color='black')
+        y_predicted = [slope * i + intercept for i in df_data[cfs_var]]
+        p2.line(df_data[cfs_var], y_predicted, color='black')
 
         # Calculations to be used in the stats label on every scatter plot
-        pearson_r, pearson_p = stats.pearsonr(df_monthly[ET_var], df_monthly['min_cfs'])
-        kendall_r, kendall_p = stats.kendalltau(df_monthly[ET_var], df_monthly['min_cfs'])
+        pearson_r, pearson_p = stats.pearsonr(df_data['EToF_MEAN'], df_data[cfs_var])
+        kendall_r, kendall_p = stats.kendalltau(df_data['EToF_MEAN'], df_data[cfs_var])
 
         # The stats label to be added.
         label_text = 'Slope: ' + str(round(slope, 4)) + '\n' + \
                      'Intercept: ' + str(round(intercept, 4)) + '\n' + \
                      'Pearson r: ' + str(round(pearson_r, 4)) + '\n' + \
                      'Pearson P-Value: ' + str(round(pearson_p, 4)) + '\n' + \
-                     'Kendall r: ' + str(round(kendall_r, 4)) + '\n' + \
+                     'Kendall Tau: ' + str(round(kendall_r, 4)) + '\n' + \
                      'Kendall P-Value: ' + str(round(kendall_p, 4)) + '\n' + \
-                     'n: ' + str(len(df_monthly))
-        label = Label(x=255, y=20, x_units='screen', y_units='screen',
-                      text_font_size='8pt', text=label_text)
-        p_month.add_layout(label)
+                     'n: ' + str(len(df_data))
+        label = Label(x=620, y=70, x_units='screen', y_units='screen', text=label_text)
+        p2.add_layout(label)
 
-        hover3 = HoverTool()
-        hover3.tooltips = [
+        hover2 = HoverTool()
+        hover2.tooltips = [
             ('Year', '@year'),
-            ('Mean Evapotranspiration', '@' + ET_var),
-            ('Minimum Stream Flow', '@min_cfs')
+            ('Month', '@month'),
+            ('EToF_MEAN', '@EToF_MEAN'),
+            (cfs_var, '@' + cfs_var)
         ]
-        p_month.add_tools(hover3)
+        p2.add_tools(hover2)
 
-        list_of_monthly_figs.append(p_month)
+        save(p2)
 
-    save(gridplot([[list_of_monthly_figs[0], list_of_monthly_figs[1], list_of_monthly_figs[2], list_of_monthly_figs[3]],
-                   [list_of_monthly_figs[4], list_of_monthly_figs[5], list_of_monthly_figs[6], list_of_monthly_figs[7]],
-                   [list_of_monthly_figs[8], list_of_monthly_figs[9], list_of_monthly_figs[10],
-                    list_of_monthly_figs[11]]]))
+        #######################################################
+        # Monthly scatter plot
 
+        output_file(site + '_monthly_scatter_plot__EToF_vs_' + cfs_var + '.html')
+        list_of_monthly_figs = []
+
+        for i in range(12):
+            df_monthly = df_data[df_data["month"] == month_dict[i + 1]]
+
+            p_month = figure(width=450, height=450)
+            p_month.xgrid.grid_line_color = None
+            p_month.ygrid.grid_line_color = None
+            p_month.circle(x=cfs_var, y='EToF_MEAN',
+                           source=ColumnDataSource(df_monthly),
+                           color='black', fill_color="#add8e6",
+                           size=8)
+
+            p_month.title.text = month_dict[i + 1] + ' - ' + site_name + ', ' + site
+            p_month.yaxis.axis_label = 'EToF_MEAN, Monthly (mm/month)'
+            p_month.xaxis.axis_label = cfs_var + ', Monthly (cfs)'
+
+            # Calculate the least-square regression line
+            regression_line = np.polyfit(df_monthly[cfs_var], df_monthly['EToF_MEAN'], 1, full=True)
+            slope = regression_line[0][0]
+            intercept = regression_line[0][1]
+            y_predicted = [slope * i + intercept for i in df_monthly[cfs_var]]
+            p_month.line(df_monthly[cfs_var], y_predicted, color='black')
+
+            # Calculations to be used in the stats label on every scatter plot
+            pearson_r, pearson_p = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
+            kendall_r, kendall_p = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
+
+            # The stats label to be added.
+            label_text = 'Slope: ' + str(round(slope, 4)) + '\n' + \
+                         'Intercept: ' + str(round(intercept, 4)) + '\n' + \
+                         'Pearson r: ' + str(round(pearson_r, 4)) + '\n' + \
+                         'Pearson P-Value: ' + str(round(pearson_p, 4)) + '\n' + \
+                         'Kendall Tau: ' + str(round(kendall_r, 4)) + '\n' + \
+                         'Kendall P-Value: ' + str(round(kendall_p, 4)) + '\n' + \
+                         'n: ' + str(len(df_monthly))
+            label = Label(x=255, y=20, x_units='screen', y_units='screen',
+                          text_font_size='8pt', text=label_text)
+            p_month.add_layout(label)
+
+            hover3 = HoverTool()
+            hover3.tooltips = [
+                ('Year', '@year'),
+                ('EToF_MEAN', '@EToF_MEAN'),
+                (cfs_var, '@' + cfs_var)
+            ]
+            p_month.add_tools(hover3)
+
+            list_of_monthly_figs.append(p_month)
+
+        save(gridplot([[list_of_monthly_figs[0], list_of_monthly_figs[1], list_of_monthly_figs[2], list_of_monthly_figs[3]],
+                       [list_of_monthly_figs[4], list_of_monthly_figs[5], list_of_monthly_figs[6], list_of_monthly_figs[7]],
+                       [list_of_monthly_figs[8], list_of_monthly_figs[9], list_of_monthly_figs[10],
+                        list_of_monthly_figs[11]]]))
+
+        os.chdir('..')
     os.chdir('..')
 
-    ##########################################################################
-    # Pearson Correlation Coefficient Calculations
-    #
-    # Note: It would be prettier to change the next 2 sections into 1 function
+def make_tables(cfs_var):
+    
+    df_metadata = load_metadata()
+    
+    # These dfs are used for exporting stats to the .xlsx files.
+    # Each time the loop is executed, a record is appended onto each df.
+    # When the loop is finished, the dfs are exported to the corresponding .xlsx files.
+    df_pearson_mediancfs_r = pd.DataFrame({'station_id': [], 'site_name': [], 'January': [], 'February': [],
+                                      'March': [], 'April': [], 'May': [], 'June': [], 'July': [], 'August': [],
+                                      'September': [], 'October': [], 'November': [], 'December': []})
+    df_pearson_mediancfs_p = df_pearson_mediancfs_r.copy(deep=True)
+    #df_pearson_q25cfs_r = df_pearson_mediancfs_r.copy(deep=True)
+    #df_pearson_q25cfs_p = df_pearson_mediancfs_r.copy(deep=True)
 
-    record_pearson_mean_r = [site, site_name]
-    record_pearson_mean_p = [site, site_name]
-    record_pearson_max_r = [site, site_name]
-    record_pearson_max_p = [site, site_name]
-    record_pearson_min_r = [site, site_name]
-    record_pearson_min_p = [site, site_name]
+    df_kendall_mediancfs_r = df_pearson_mediancfs_r.copy(deep=True)
+    df_kendall_mediancfs_p = df_pearson_mediancfs_r.copy(deep=True)
+    #df_kendall_q25cfs_r = df_pearson_mediancfs_r.copy(deep=True)
+    #df_kendall_q25cfs_p = df_pearson_mediancfs_r.copy(deep=True)
 
-    for i in range(12):
-        df_monthly = df_merged[df_merged["month"] == month_dict[i + 1]]
+    # If a 'tables' directory does not exist, make it
+    path = os.getcwd() + '/tables'
+    if not (os.path.isdir(path)):
+        os.mkdir('tables')
+    os.chdir('tables')
 
-        r_correlation_mean, p_mean = stats.pearsonr(df_monthly[ET_var], df_monthly['mean_cfs'])
-        r_correlation_max, p_max = stats.pearsonr(df_monthly[ET_var], df_monthly['max_cfs'])
-        r_correlation_min, p_min = stats.pearsonr(df_monthly[ET_var], df_monthly['min_cfs'])
+    for site in site_list:
 
-        record_pearson_mean_r.append(r_correlation_mean)
-        record_pearson_mean_p.append(p_mean)
-        record_pearson_max_r.append(r_correlation_max)
-        record_pearson_max_p.append(p_max)
-        record_pearson_min_r.append(r_correlation_min)
-        record_pearson_min_p.append(p_min)
+        site_name = df_metadata.loc[df_metadata['station_id'] == int(site), 'site_name'].iloc[0]
+        df_data = load_raw_data_and_join(site)
 
-    df_pearson_mean_r.loc[len(df_pearson_mean_r.index)] = record_pearson_mean_r
-    df_pearson_mean_p.loc[len(df_pearson_mean_p.index)] = record_pearson_mean_p
-    df_pearson_max_r.loc[len(df_pearson_max_r.index)] = record_pearson_max_r
-    df_pearson_max_p.loc[len(df_pearson_max_p.index)] = record_pearson_max_p
-    df_pearson_min_r.loc[len(df_pearson_min_r.index)] = record_pearson_min_r
-    df_pearson_min_p.loc[len(df_pearson_min_p.index)] = record_pearson_min_p
+        ##########################################################################
+        # Pearson Correlation Coefficient Calculations
+        #
+        # Note: It would be prettier to change the next 2 sections into 1 function
 
-    #######################################################
-    # Kendall Rank Correlation Coefficient Calculations
+        record_pearson_mediancfs_r = [site, site_name]
+        record_pearson_mediancfs_p = [site, site_name]
+        #record_pearson_q25cfs_r = [site, site_name]
+        #record_pearson_q25cfs_p = [site, site_name]
 
-    record_kendall_mean_r = [site, site_name]
-    record_kendall_mean_p = [site, site_name]
-    record_kendall_max_r = [site, site_name]
-    record_kendall_max_p = [site, site_name]
-    record_kendall_min_r = [site, site_name]
-    record_kendall_min_p = [site, site_name]
+        for i in range(12):
+            df_monthly = df_data[df_data["month"] == month_dict[i + 1]]
 
-    for i in range(12):
-        df_monthly = df_merged[df_merged["month"] == month_dict[i + 1]]
+            r_correlation_mediancfs, p_mediancfs = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
+            #r_correlation_q25cfs, p_q25cfs = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly['Q25_cfs'])
 
-        tau_correlation_mean, p_mean = stats.kendalltau(df_monthly[ET_var], df_monthly['mean_cfs'])
-        tau_correlation_max, p_max = stats.kendalltau(df_monthly[ET_var], df_monthly['max_cfs'])
-        tau_correlation_min, p_min = stats.kendalltau(df_monthly[ET_var], df_monthly['min_cfs'])
+            record_pearson_mediancfs_r.append(r_correlation_mediancfs)
+            record_pearson_mediancfs_p.append(p_mediancfs)
+            #record_pearson_q25cfs_r.append(r_correlation_max)
+            #record_pearson_q25cfs_p.append(p_max)
 
-        record_kendall_mean_r.append(tau_correlation_mean)
-        record_kendall_mean_p.append(p_mean)
-        record_kendall_max_r.append(tau_correlation_max)
-        record_kendall_max_p.append(p_max)
-        record_kendall_min_r.append(tau_correlation_min)
-        record_kendall_min_p.append(p_min)
+        df_pearson_mediancfs_r.loc[len(df_pearson_mediancfs_r.index)] = record_pearson_mediancfs_r
+        df_pearson_mediancfs_p.loc[len(df_pearson_mediancfs_p.index)] = record_pearson_mediancfs_p
+        #df_pearson_max_r.loc[len(df_pearson_max_r.index)] = record_pearson_max_r
+        #df_pearson_max_p.loc[len(df_pearson_max_p.index)] = record_pearson_max_p
 
-    df_kendall_mean_r.loc[len(df_kendall_mean_r.index)] = record_kendall_mean_r
-    df_kendall_mean_p.loc[len(df_kendall_mean_p.index)] = record_kendall_mean_p
-    df_kendall_max_r.loc[len(df_kendall_max_r.index)] = record_kendall_max_r
-    df_kendall_max_p.loc[len(df_kendall_max_p.index)] = record_kendall_max_p
-    df_kendall_min_r.loc[len(df_kendall_min_r.index)] = record_kendall_min_r
-    df_kendall_min_p.loc[len(df_kendall_min_p.index)] = record_kendall_min_p
 
-################################################################
-# Set the metadata for the .xlsx files and export the dataframes.
-# We do this for both kendall and pearson files.
+        #######################################################
+        # Kendall Rank Correlation Coefficient Calculations
 
-os.chdir('..')
-path = os.getcwd() + '/tables'
-if not (os.path.isdir(path)):
-    os.mkdir('tables')
-os.chdir('tables')
+        record_kendall_mediancfs_r = [site, site_name]
+        record_kendall_mediancfs_p = [site, site_name]
+        #record_kendall_max_r = [site, site_name]
+        #record_kendall_max_p = [site, site_name]
 
-# Pearson start
-df_pearson_mean_r = df_pearson_mean_r.transpose()
-df_pearson_mean_p = df_pearson_mean_p.transpose()
-df_pearson_max_r = df_pearson_max_r.transpose()
-df_pearson_max_p = df_pearson_max_p.transpose()
-df_pearson_min_r = df_pearson_min_r.transpose()
-df_pearson_min_p = df_pearson_min_p.transpose()
+        for i in range(12):
+            df_monthly = df_data[df_data["month"] == month_dict[i + 1]]
 
-writer = pd.ExcelWriter('pearson_' + ET_var + '_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
+            tau_correlation_mediancfs, p_mediancfs = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
+            #tau_correlation_max, p_max = stats.kendalltau(df_monthly[ET_var], df_monthly['max_cfs'])
 
-df_pearson_mean_r.to_excel(writer, sheet_name='mean_flow', index=True)
-df_pearson_mean_p.to_excel(writer, sheet_name='mean_flow', index=True, startrow=17)
-df_pearson_max_r.to_excel(writer, sheet_name='max_flow', index=True)
-df_pearson_max_p.to_excel(writer, sheet_name='max_flow', index=True, startrow=17)
-df_pearson_min_r.to_excel(writer, sheet_name='min_flow', index=True)
-df_pearson_min_p.to_excel(writer, sheet_name='min_flow', index=True, startrow=17)
+            record_kendall_mediancfs_r.append(tau_correlation_mediancfs)
+            record_kendall_mediancfs_p.append(p_mediancfs)
+            #record_kendall_max_r.append(tau_correlation_max)
+            #record_kendall_max_p.append(p_max)
 
-ws = writer.sheets['mean_flow']
-ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
-ws = writer.sheets['max_flow']
-ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
-ws = writer.sheets['min_flow']
-ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
+        df_kendall_mediancfs_r.loc[len(df_kendall_mediancfs_r.index)] = record_kendall_mediancfs_r
+        df_kendall_mediancfs_p.loc[len(df_kendall_mediancfs_p.index)] = record_kendall_mediancfs_p
+        #df_kendall_max_r.loc[len(df_kendall_max_r.index)] = record_kendall_max_r
+        #df_kendall_max_p.loc[len(df_kendall_max_p.index)] = record_kendall_max_p
 
-# Kendall start
-df_kendall_mean_r = df_kendall_mean_r.transpose()
-df_kendall_mean_p = df_kendall_mean_p.transpose()
-df_kendall_max_r = df_kendall_max_r.transpose()
-df_kendall_max_p = df_kendall_max_p.transpose()
-df_kendall_min_r = df_kendall_min_r.transpose()
-df_kendall_min_p = df_kendall_min_p.transpose()
+    ################################################################
+    # Set the metadata for the .xlsx files and export the dataframes.
+    # We do this for both kendall and pearson files.
 
-writer2 = pd.ExcelWriter('kendall_' + ET_var + '_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
+    # Pearson start
+    df_pearson_mediancfs_r = df_pearson_mediancfs_r.transpose()
+    df_pearson_mediancfs_p = df_pearson_mediancfs_p.transpose()
+    #df_pearson_max_r = df_pearson_max_r.transpose()
+    #df_pearson_max_p = df_pearson_max_p.transpose()
 
-df_kendall_mean_r.to_excel(writer2, sheet_name='mean_flow', index=True)
-df_kendall_mean_p.to_excel(writer2, sheet_name='mean_flow', index=True, startrow=17)
-df_kendall_max_r.to_excel(writer2, sheet_name='max_flow', index=True)
-df_kendall_max_p.to_excel(writer2, sheet_name='max_flow', index=True, startrow=17)
-df_kendall_min_r.to_excel(writer2, sheet_name='min_flow', index=True)
-df_kendall_min_p.to_excel(writer2, sheet_name='min_flow', index=True, startrow=17)
 
-ws = writer2.sheets['mean_flow']
-ws.write_string(0, 0, "Kendall's Correlation: Tau")
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
-ws = writer2.sheets['max_flow']
-ws.write_string(0, 0, "Kendall's Correlation: Tau")
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
-ws = writer2.sheets['min_flow']
-ws.write_string(0, 0, "Kendall's Correlation: Tau")
-ws.write_string(17, 0, 'P-value')
-ws.set_column(0, 0, 35)
-ws.set_column(1, 50, 50)
+    writer = pd.ExcelWriter('pearson_EToF_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
 
-writer.save()
-writer2.save()'''
+    df_pearson_mediancfs_r.to_excel(writer, sheet_name=cfs_var, index=True)
+    df_pearson_mediancfs_p.to_excel(writer, sheet_name=cfs_var, index=True, startrow=17)
+    #df_pearson_max_r.to_excel(writer, sheet_name='max_flow', index=True)
+    #df_pearson_max_p.to_excel(writer, sheet_name='max_flow', index=True, startrow=17)
+
+    ws = writer.sheets[cfs_var]
+    ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
+    ws.write_string(17, 0, 'P-value')
+    ws.set_column(0, 0, 35)
+    ws.set_column(1, 50, 50)
+    #ws = writer.sheets['max_flow']
+    #ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
+    #ws.write_string(17, 0, 'P-value')
+    #ws.set_column(0, 0, 35)
+    #ws.set_column(1, 50, 50)
+
+    # Kendall start
+    df_kendall_mediancfs_r = df_kendall_mediancfs_r.transpose()
+    df_kendall_mediancfs_p = df_kendall_mediancfs_p.transpose()
+    #df_kendall_max_r = df_kendall_max_r.transpose()
+    #df_kendall_max_p = df_kendall_max_p.transpose()
+
+    writer2 = pd.ExcelWriter('kendall_EToF_monthly_gage_vs_et_correlations.xlsx', engine='xlsxwriter')
+
+    df_kendall_mediancfs_r.to_excel(writer2, sheet_name=cfs_var, index=True)
+    df_kendall_mediancfs_p.to_excel(writer2, sheet_name=cfs_var, index=True, startrow=17)
+    #df_kendall_max_r.to_excel(writer2, sheet_name='max_flow', index=True)
+    #df_kendall_max_p.to_excel(writer2, sheet_name='max_flow', index=True, startrow=17)
+
+    ws = writer2.sheets[cfs_var]
+    ws.write_string(0, 0, "Kendall's Correlation: Tau")
+    ws.write_string(17, 0, 'P-value')
+    ws.set_column(0, 0, 35)
+    ws.set_column(1, 50, 50)
+    #ws = writer2.sheets['max_flow']
+    #ws.write_string(0, 0, "Kendall's Correlation: Tau")
+    #ws.write_string(17, 0, 'P-value')
+    #ws.set_column(0, 0, 35)
+    #ws.set_column(1, 50, 50)
+
+    writer.save()
+    writer2.save()
+
+
+def main():
+    #make_plots('median_cfs')
+    #make_plots('Q25_cfs')
+    make_tables('median_cfs')
+
+main()
