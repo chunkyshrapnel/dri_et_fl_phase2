@@ -79,8 +79,8 @@ for site in site_list:
     site_name = df_metadata.loc[df_metadata['station_id'] == int(site),'site_name'].iloc[0]
     df_ET.loc[(site_name, 'Mean'), :] = record_mean_ET
     df_ET.loc[(site_name, 'Standard Dev'), :] = record_std_ET
-    df_EToF.loc[(site_name, 'Mean'), :] = record_mean_ET
-    df_EToF.loc[(site_name, 'Standard Dev'), :] = record_std_ET
+    df_EToF.loc[(site_name, 'Mean'), :] = record_mean_EToF
+    df_EToF.loc[(site_name, 'Standard Dev'), :] = record_std_EToF
 
 # Drop the first record that was used to initialize the data frame
 df_ET.drop('init', inplace=True)

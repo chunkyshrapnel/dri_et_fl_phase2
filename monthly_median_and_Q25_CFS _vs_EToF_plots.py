@@ -73,7 +73,10 @@ def load_raw_data_and_join(site):
     df_data['month'] = df_data['month'].apply(lambda x: month_dict[x])
     
     return df_data
-    
+
+# Takes in a 'cfs' variable and compares it against EToF.
+# Makes 3 plots for each site.
+# Series, scatter, and a 4 * 3 monthly scatter plot.
 def make_plots(cfs_var):
 
     df_metadata = load_metadata()
@@ -101,7 +104,7 @@ def make_plots(cfs_var):
         p = figure(x_axis_type="datetime", width=1500)
         p.xgrid.grid_line_color = None
         p.ygrid.grid_line_color = None
-        p.circle(x='START_DATE', y=cfs_var,
+        circle = p.circle(x='START_DATE', y=cfs_var,
                  legend_label= cfs_var + ', Monthly (cfs)',
                  source=ColumnDataSource(df_data),
                  color='blue', size=6)
@@ -110,7 +113,7 @@ def make_plots(cfs_var):
                color='blue')
 
         p.extra_y_ranges = {"foo": Range1d(start=df_data['EToF_MEAN'].min() - 5, end=df_data['EToF_MEAN'].max() + 5)}
-        p.circle(x='START_DATE', y='EToF_MEAN',
+        circle2 = p.circle(x='START_DATE', y='EToF_MEAN',
                  source=ColumnDataSource(df_data),
                  y_range_name='foo',
                  legend_label='EToF_MEAN, Monthly (mm/month)',  # idk if this is the right units
@@ -126,6 +129,7 @@ def make_plots(cfs_var):
         p.add_layout(LinearAxis(y_range_name="foo", axis_label='EToF_MEAN, Monthly (mm/month)'), 'right')
 
         hover = HoverTool()
+        hover.renderers = [circle, circle2]
         p.legend.click_policy = 'hide'
         hover.tooltips = [
             ('Year', '@year'),
@@ -145,7 +149,7 @@ def make_plots(cfs_var):
         p2 = figure(width=900, height=900)
         p2.xgrid.grid_line_color = None
         p2.ygrid.grid_line_color = None
-        p2.circle(x=cfs_var, y='EToF_MEAN',
+        circle3 = p2.circle(x=cfs_var, y='EToF_MEAN',
                   source=ColumnDataSource(df_data),
                   color='black', fill_color="#add8e6",
                   size=8)
@@ -166,17 +170,18 @@ def make_plots(cfs_var):
         kendall_r, kendall_p = stats.kendalltau(df_data['EToF_MEAN'], df_data[cfs_var])
 
         # The stats label to be added.
-        label_text = 'Slope: ' + str(round(slope, 4)) + '\n' + \
-                     'Intercept: ' + str(round(intercept, 4)) + '\n' + \
-                     'Pearson r: ' + str(round(pearson_r, 4)) + '\n' + \
-                     'Pearson P-Value: ' + str(round(pearson_p, 4)) + '\n' + \
-                     'Kendall Tau: ' + str(round(kendall_r, 4)) + '\n' + \
-                     'Kendall P-Value: ' + str(round(kendall_p, 4)) + '\n' + \
+        label_text = 'Slope: ' + str(round(slope * 1e4, 3)) + ' 1e-4' + '\n' + \
+                     'Intercept: ' + str(round(intercept, 3)) + '\n' + \
+                     'Pearson r: ' + str(round(pearson_r, 3)) + '\n' + \
+                     'Pearson P-Value: ' + str(round(pearson_p, 3)) + '\n' + \
+                     'Kendall Tau: ' + str(round(kendall_r, 3)) + '\n' + \
+                     'Kendall P-Value: ' + str(round(kendall_p, 3)) + '\n' + \
                      'n: ' + str(len(df_data))
         label = Label(x=620, y=70, x_units='screen', y_units='screen', text=label_text)
         p2.add_layout(label)
 
         hover2 = HoverTool()
+        hover2.renderers = [circle3]
         hover2.tooltips = [
             ('Year', '@year'),
             ('Month', '@month'),
@@ -199,7 +204,7 @@ def make_plots(cfs_var):
             p_month = figure(width=450, height=450)
             p_month.xgrid.grid_line_color = None
             p_month.ygrid.grid_line_color = None
-            p_month.circle(x=cfs_var, y='EToF_MEAN',
+            circle4 = p_month.circle(x=cfs_var, y='EToF_MEAN',
                            source=ColumnDataSource(df_monthly),
                            color='black', fill_color="#add8e6",
                            size=8)
@@ -220,18 +225,19 @@ def make_plots(cfs_var):
             kendall_r, kendall_p = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
 
             # The stats label to be added.
-            label_text = 'Slope: ' + str(round(slope, 4)) + '\n' + \
-                         'Intercept: ' + str(round(intercept, 4)) + '\n' + \
-                         'Pearson r: ' + str(round(pearson_r, 4)) + '\n' + \
-                         'Pearson P-Value: ' + str(round(pearson_p, 4)) + '\n' + \
-                         'Kendall Tau: ' + str(round(kendall_r, 4)) + '\n' + \
-                         'Kendall P-Value: ' + str(round(kendall_p, 4)) + '\n' + \
+            label_text = 'Slope: ' + str(round(slope * 1e4, 3)) + ' 1e-4' + '\n' + \
+                         'Intercept: ' + str(round(intercept, 3)) + '\n' + \
+                         'Pearson r: ' + str(round(pearson_r, 3)) + '\n' + \
+                         'Pearson P-Value: ' + str(round(pearson_p, 3)) + '\n' + \
+                         'Kendall Tau: ' + str(round(kendall_r, 3)) + '\n' + \
+                         'Kendall P-Value: ' + str(round(kendall_p, 3)) + '\n' + \
                          'n: ' + str(len(df_monthly))
             label = Label(x=255, y=20, x_units='screen', y_units='screen',
                           text_font_size='8pt', text=label_text)
             p_month.add_layout(label)
 
             hover3 = HoverTool()
+            hover3.renderers = [circle4]
             hover3.tooltips = [
                 ('Year', '@year'),
                 ('EToF_MEAN', '@EToF_MEAN'),
@@ -285,8 +291,8 @@ def make_tables(cfs_var):
 
             r_correlation, p_pearson = stats.pearsonr(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
 
-            record_pearson_r.append(r_correlation)
-            record_pearson_p.append(p_pearson)
+            record_pearson_r.append(round(r_correlation, 3))
+            record_pearson_p.append(round(p_pearson, 3))
 
         df_pearsons_r.loc[len(df_pearsons_r.index)] = record_pearson_r
         df_pearson_p.loc[len(df_pearson_p.index)] = record_pearson_p
@@ -302,8 +308,8 @@ def make_tables(cfs_var):
 
             tau_correlation_mediancfs, p_pearson = stats.kendalltau(df_monthly['EToF_MEAN'], df_monthly[cfs_var])
 
-            record_kendall_r.append(tau_correlation_mediancfs)
-            record_kendall_p.append(p_pearson)
+            record_kendall_r.append(round(tau_correlation_mediancfs, 3))
+            record_kendall_p.append(round(p_pearson, 3))
 
         df_kendall_r.loc[len(df_kendall_r.index)] = record_kendall_r
         df_kendall_p.loc[len(df_kendall_p.index)] = record_kendall_p
@@ -324,8 +330,7 @@ def make_tables(cfs_var):
     ws = writer.sheets[cfs_var]
     ws.write_string(0, 0, 'Pearson Correlation Coefficient: R')
     ws.write_string(17, 0, 'P-value')
-    ws.set_column(0, 0, 35)
-    ws.set_column(1, 50, 50)
+    ws.set_column(0, 50, 35)
 
     # Kendall start
     df_kendall_r = df_kendall_r.transpose()
@@ -339,17 +344,15 @@ def make_tables(cfs_var):
     ws = writer2.sheets[cfs_var]
     ws.write_string(0, 0, "Kendall's Correlation: Tau")
     ws.write_string(17, 0, 'P-value')
-    ws.set_column(0, 0, 35)
-    ws.set_column(1, 50, 50)
+    ws.set_column(0, 50, 35)
 
     writer.save()
     writer2.save()
     os.chdir('..')
 
-
 def main():
-    #make_plots('median_cfs')
-    #make_plots('Q25_cfs')
+    make_plots('median_cfs')
+    make_plots('Q25_cfs')
     make_tables('median_cfs')
     make_tables('Q25_cfs')
 

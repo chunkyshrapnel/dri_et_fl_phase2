@@ -47,7 +47,7 @@ for site in site_list:
     p_site = figure(width=500, height=500)
     p_site.xgrid.grid_line_color = None
     p_site.ygrid.grid_line_color = None
-    p_site.circle(x='discharge_mean_cfs', y='gs_etof',
+    circle = p_site.circle(x='discharge_mean_cfs', y='gs_etof',
                   source=ColumnDataSource(df_station),
                   color='black', fill_color="#add8e6",
                   size=8)
@@ -70,7 +70,7 @@ for site in site_list:
     kendall_r, kendall_p = stats.kendalltau(df_station['gs_etof'], df_station['discharge_mean_cfs'])
 
     # The stats label to be added.
-    label_text = 'Slope: ' + str(round(slope * 1e4 , 3)) + ' 1e4' + '\n' + \
+    label_text = 'Slope: ' + str(round(slope * 1e4 , 3)) + ' 1e-4' + '\n' + \
                  'Intercept: ' + str(round(intercept, 3)) + '\n' + \
                  'Pearson r: ' + str(round(pearson_r, 3)) + '\n' + \
                  'Pearson P-Value: ' + str(round(pearson_p, 3)) + '\n' + \
@@ -81,13 +81,14 @@ for site in site_list:
                   text_font_size='8pt', text=label_text)
     p_site.add_layout(label)
 
-    hover3 = HoverTool()
-    hover3.tooltips = [
+    hover = HoverTool()
+    hover.renderers = [circle]
+    hover.tooltips = [
         ('Year', '@year'),
         ('Growing Season EToF;', '@gs_etof'),
         ('Mean Discharge', '@discharge_mean_cfs')
     ]
-    p_site.add_tools(hover3)
+    p_site.add_tools(hover)
 
     list_of_monthly_figs.append(p_site)
 
